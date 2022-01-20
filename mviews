@@ -1,0 +1,39 @@
+A. All materialized views accessible to the current user
+
+select owner as schema_name,
+       mview_name,
+       container_name,
+       query as definition,
+       refresh_mode,
+       refresh_method,
+       build_mode,
+       last_refresh_date,
+       compile_state
+from sys.all_mviews
+order by owner, mview_name;
+
+B. If you have privilege on dba_mviews
+
+select owner as schema_name,
+       mview_name,
+       container_name,
+       query as definition,
+       refresh_mode,
+       refresh_method,
+       build_mode,
+       last_refresh_date,
+       compile_state
+from sys.dba_mviews
+order by owner, mview_name;
+
+
+
+The following query can be used to know when the MV was last refreshed.
+
+SQL> alter session set nls_date_format='dd/mm/yy hh24:mi:ss';
+SQL> select owner, mview_name, last_refresh_type, last_refresh_date
+    from all_mviews;
+
+
+
+select currmvowner, currmvname from v$mvrefresh;
