@@ -37,3 +37,138 @@ SQL> select owner, mview_name, last_refresh_type, last_refresh_date
 
 
 select currmvowner, currmvname from v$mvrefresh;
+
+
+
+
+
+***********************************************************************************
+
+Materialized Views
+A materialized view is a table segment whose contents are periodically refreshed based on a 
+query, either against a local or remote table. 
+Data can be summarized, pre computed and distributed in the form of Materialized views.
+In early releases, they were knows as Snapshots.
+The 2 main advantages of Materialized views are
+• Replication of data between sites.
+• Performance Improvement
+BUILD Options
+The BUILD clause options are shown below.
+• IMMEDIATE: The materialized view is populated immediately.
+• DEFERRED: The materialized view is populated on the first requested refresh.
+The following refresh types are available.
+• FAST: A fast refresh is attempted. If materialized view logs are not present against the 
+source tables in advance, the creation fails.
+• COMPLETE: The table segment supporting the materialized view is truncated and 
+repopulated completely using the associated query.
+• FORCE: A fast refresh is attempted. If one is not possible a complete refresh is 
+performed.
+•
+A refresh can be triggered in one of two ways.
+• ON COMMIT: The refresh is triggered by a committed data change in one of the 
+dependent tables.
+• ON DEMAND: The refresh is initiated by a manual request or a scheduled task.
+Materialized Views with ON COMMIT
+ON COMMIT ensures that changes are reflected as soon changes are done in the base tables.
+CREATE MATERIALIZED VIEW SALES_C_MV
+BUILD IMMEDIATE 
+REFRESH FORCE
+ON COMMIT
+AS
+SELECT S.SALES_DATE, S.ORDER_ID, S.PRODUCT_ID,
+ S.CUSTOMER_ID, S.SALESPERSON_ID, S.QUANTITY
+ S.UNIT_PRICE, S.SALES_AMOUNT, S.TAX_AMOUNT, S.TOTAL_AMOUNT,
+ P.PRODUCT_NAME
+FROM SALES S, PRODUCT P
+WHERE S.PRODUCT_ID = P.PRODUCT_ID;
+Materialized Views with ON DEMAND
+We initiate the refresh manually or through a schedule task
+CREATE MATERIALIZED VIEW SALES_D_MV
+BUILD IMMEDIATE 
+REFRESH FORCE
+ON DEMAND
+AS
+SELECT S.SALES_DATE, S.ORDER_ID, S.PRODUCT_ID,
+ S.CUSTOMER_ID, S.SALESPERSON_ID, S.QUANTITY
+ S.UNIT_PRICE, S.SALES_AMOUNT, S.TAX_AMOUNT, S.TOTAL_AMOUNT,
+ P.PRODUCT_NAME
+FROM SALES S, PRODUCT P
+WHERE S.PRODUCT_ID = P.PRODUCT_ID;
+Refresh the Materialized view.
+EXEC DBMS_MVIEW.REFRESH('SALES_D_MV');
+Materialized Views with REFRESH FAST
+Based on the availability of materialized view logs, an incremental refresh happens.
+• Fast refreshable materialized views can be created based on master tables and master 
+materialized views only.
+• Materialized views based on a synonym or a view must be complete refreshed.
+• Materialized views are not eligible for fast refresh if the defined subquery contains an 
+analytic function.
+Step 1: First create a Materialized view Log.
+CREATE MATERIALIZED VIEW LOG ON SALES
+WITH PRIMARY KEY
+INCLUDING NEW VALUES;
+If you do not have a primary key on the table, then you can go with the ROWID option.
+CREATE MATERIALIZED VIEW LOG ON SALES
+WITH ROWID
+INCLUDING NEW VALUES;
+Step 2: Now create the materialized view for fast refresh.
+CREATE MATERIALIZED VIEW SALES_F_MV
+BUILD IMMEDIATE 
+REFRESH FAST
+ON DEMAND
+AS
+SELECT S.SALES_DATE, S.ORDER_ID, S.PRODUCT_ID,
+ S.CUSTOMER_ID, S.SALESPERSON_ID, S.QUANTITY
+ S.UNIT_PRICE, S.SALES_AMOUNT, S.TAX_AMOUNT, S.TOTAL_AMOUNT,
+ P.PRODUCT_NAME
+FROM SALES S, PRODUCT P
+WHERE S.PRODUCT_ID = P.PRODUCT_ID;
+Timing the refresh
+The START WITH clause tells the database when to perform the first replication from the master 
+table to the local base table. The NEXT clause specifies the interval between refreshes.
+Below refresh executes every 7 days.
+CREATE MATERIALIZED VIEW SALES_F_MV
+BUILD IMMEDIATE 
+REFRESH FORCE
+ON DEMAND
+START WITH SYSDATE NEXT SYSDATE + 7
+AS
+SELECT S.SALES_DATE, S.ORDER_ID, S.PRODUCT_ID,
+ S.CUSTOMER_ID, S.SALESPERSON_ID, S.QUANTITY
+ S.UNIT_PRICE, S.SALES_AMOUNT, S.TAX_AMOUNT, S.TOTAL_AMOUNT,
+ P.PRODUCT_NAME
+FROM SALES S, PRODUCT P
+WHERE S.PRODUCT_ID = P.PRODUCT_ID;
+Below refresh executes every 30 minutes.
+CREATE MATERIALIZED VIEW SALES_F_MV
+BUILD IMMEDIATE 
+REFRESH FORCE
+ON DEMAND
+START WITH SYSDATE NEXT SYSDATE + 30/(24*60)
+AS
+SELECT S.SALES_DATE, S.ORDER_ID, S.PRODUCT_ID,
+ S.CUSTOMER_ID, S.SALESPERSON_ID, S.QUANTITY
+ S.UNIT_PRICE, S.SALES_AMOUNT, S.TAX_AMOUNT, S.TOTAL_AMOUNT,
+ P.PRODUCT_NAME
+FROM SALES S, PRODUCT P
+WHERE S.PRODUCT_ID = P.PRODUCT_ID;
+Enable Query Rewrite
+Materialized views stored in the same database as their base tables can improve query 
+performance through query rewrites. When QUERY REWRITE is enabled, database will try to 
+query the MV where ever possible, instead of base tables.
+CREATE MATERIALIZED VIEW SALES_SUM_MV
+BUILD IMMEDIATE 
+REFRESH FORCE
+ON DEMAND
+ENABLE QUERY REWRITE
+AS
+SELECT TRUNC(S.SALES_DATE,'MON') AS SALES_MONTH, 
+ P.PRODUCT_NAME,
+ SUM(S.QUANTITY) AS QUANTITY,
+ SUM(S.UNIT_PRICE) AS UNIT_PRICE,
+ SUM(S.SALES_AMOUNT) AS SALES_AMOUNT, 
+ SUM(S.TAX_AMOUNT) AS TAX_AMOUNT, 
+ SUM(S.TOTAL_AMOUNT) AS TOTAL_AMOUNT
+FROM SALES S, PRODUCT P
+WHERE S.PRODUCT_ID = P.PRODUCT_ID
+GROUP BY TRUNC(S.SALES_DATE,'MON') , P.PRODUCT_NAME;
