@@ -15,4 +15,6 @@ If you were refreshing these MVs using Job Queues/DBMS_JOB`:-
 SQL> select job, last_date last_refresh,next_date next_refresh, total_time,broken, failures, what
 from dba_jobs
 where what like '%dbms_refresh%';
+
+
 The reason of the job failure is written in alert_<SID>.log file as shown below as well as in a trace file referenced in the alert log file.
